@@ -8,5 +8,16 @@
 <h1 th:inline="text">Hello.v.2</h1>
 <!--/*@thymesVar id="hello" type="java.lang.String"*/-->
 <p th:text="${hello}"></p>
+<tr  th:each="seckill,iterStat : ${hello}">
+    <!--/*@thymesVar id="seckillId" type="java.lang.Integer"*/-->
+    <th scope="row" th:text="${seckill.seckillId}">1</th>
+    <td >
+        <img th:src="${seckill.name}"/>
+    </td>
+    <td th:text="${seckill.number}">Otto</td>
+    <td th:text="${seckill.startTime}">@mdo</td>
+    <td th:text="${seckill.endTime}">index</td>
+    <td th:text="${seckill.createTime}">index</td>
+</tr>
 </body>
 </html>
