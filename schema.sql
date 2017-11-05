@@ -45,7 +45,7 @@ INSERT INTO `seckill` VALUES ('1003', '200元秒杀红米note', '400', '2017-04-
 -- ----------------------------
 DROP TABLE IF EXISTS `success_killed`;
 CREATE TABLE `success_killed` (
-  `seckill_id` int(11) NOT NULL COMMENT '秒杀商品id',
+  `seckill_id` bigint(11) NOT NULL COMMENT '秒杀商品id',
   `user_phone` bigint(20) NOT NULL COMMENT '用户手机号',
   `state` int(1) NOT NULL DEFAULT '-1' COMMENT '状态标示,-1：无效,0：成功,1：无效，2：已发货',
   `create_time` timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT '创建时间',

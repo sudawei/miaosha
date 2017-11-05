@@ -1,12 +1,17 @@
 package com.suwei.miaosha.Vo;
 
+import com.fasterxml.jackson.annotation.JsonInclude;
+
+import java.io.Serializable;
+
 /**
  * @Auhter : suwei
  * @Descprition :暴露秒杀的接口地址：秒杀开启时输出接口地址，否则输出系统时间和秒杀时间
  * @Date : Created in 15:00 2017\11\5 0005
  * @Modified By :
  */
-public class Exposer {
+
+public class Exposer  {
 
     private boolean exposed;
 
