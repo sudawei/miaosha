@@ -104,9 +104,9 @@
 
   <update id="reduceNumber" parameterType="map" >
     update seckill
-    set number = number - 1,
-    where seckill_id = #{seckillId} and start_time <![CDATA[ <= ]]> #{killTime}
-    AND end_time <![CDATA[ >= ]]> #{killTime} AND number > 0;
+    set number = number - 1
+    where seckill_id = #{0} and start_time <![CDATA[ <= ]]> #{1}
+    AND end_time <![CDATA[ >= ]]> #{1} AND number > 0
   </update>
 
   <select id="selectByPrimaryKey" resultMap="BaseResultMap" parameterType="java.lang.Long" >
@@ -121,6 +121,16 @@
     <include refid="Base_Column_List" />
     from seckill
     ORDER BY create_time DESC
+  </select>
+
+  <!--使用mybatis调用存储过程-->
+  <select id="killByProcedure" statementType="CALLABLE" parameterType="map">
+    call execute_seckill(
+      #{seckillId,jdbcType=BIGINT,mode=IN},
+      #{phone,jdbcType=BIGINT,mode=IN},
+      #{killTime,jdbcType=TIMESTAMP,mode=IN},
+      #{result,jdbcType=INTEGER,mode=OUT}
+    )
   </select>
 
 </mapper>

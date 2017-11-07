@@ -6,8 +6,9 @@ import org.springframework.stereotype.Repository;
 
 import java.util.Date;
 import java.util.List;
+import java.util.Map;
 
-@Repository
+
 public interface SeckillMapper {
     int deleteByPrimaryKey(Long seckillId);
 
@@ -25,7 +26,7 @@ public interface SeckillMapper {
      * @param killTime
      * @return
      */
-    int reduceNumber(@Param("seckillId") Long seckillId, @Param("killTime")Date killTime);
+    int reduceNumber(@Param("seckillId")Long seckillId, @Param("killTime")Date killTime);
 
     /**
      * 根据id查询秒杀商品
@@ -40,4 +41,6 @@ public interface SeckillMapper {
      * @return
      */
     List<Seckill> query();
+
+    void killByProcedure(Map<String,Object> paramMap);
 }

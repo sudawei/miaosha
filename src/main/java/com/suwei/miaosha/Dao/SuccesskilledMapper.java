@@ -4,7 +4,7 @@ import com.suwei.miaosha.Entity.Successkilled;
 import com.suwei.miaosha.Entity.SuccesskilledKey;
 import org.springframework.stereotype.Repository;
 
-@Repository
+
 public interface SuccesskilledMapper {
     int deleteByPrimaryKey(SuccesskilledKey key);
 

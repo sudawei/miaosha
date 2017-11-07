@@ -51,6 +51,14 @@ public interface SeckillService {
             throws SeckillException,RepeatKillException,SeckillCloseException;
 
     /**
+     * 执行秒杀操作by 存储过程
+     *
+     * @param successkilledKey
+     * @param md5
+     */
+    ServerResponse<SeckillExecution> executeSeckillProcedure(SuccesskilledKey successkilledKey, String md5);
+
+    /**
      * 检验是否重复秒杀
      * @param successkilledKey
      * @return

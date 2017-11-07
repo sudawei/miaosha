@@ -8,22 +8,32 @@ import com.suwei.miaosha.Common.SeckillStatusCode;
 import com.suwei.miaosha.Common.ServerResponse;
 import com.suwei.miaosha.Dao.SeckillMapper;
 import com.suwei.miaosha.Dao.SuccesskilledMapper;
+import com.suwei.miaosha.Dao.cache.RedisDao;
 import com.suwei.miaosha.Entity.Seckill;
 import com.suwei.miaosha.Entity.Successkilled;
 import com.suwei.miaosha.Entity.SuccesskilledKey;
 import com.suwei.miaosha.Exception.RepeatKillException;
 import com.suwei.miaosha.Exception.SeckillCloseException;
 import com.suwei.miaosha.Exception.SeckillException;
+import com.suwei.miaosha.Redis.Cache;
 import com.suwei.miaosha.Service.SeckillService;
 import com.suwei.miaosha.Vo.Exposer;
 import com.suwei.miaosha.Vo.SeckillExecution;
 import com.suwei.miaosha.Vo.SuccessSecKilledWithSeckill;
 import org.apache.commons.lang3.StringUtils;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.data.redis.core.RedisTemplate;
+import org.springframework.data.redis.core.ValueOperations;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
+import org.thymeleaf.util.MapUtils;
 
 import java.util.Date;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 
 /**
  * @Auhter : suwei
@@ -34,6 +44,8 @@ import java.util.List;
 @Service("seckillService")
 public class SeckillServiceImpl implements SeckillService {
 
+    private final Logger logger = LoggerFactory.getLogger(this.getClass());
+
     @Autowired
     private SeckillMapper seckillMapper;
 
@@ -41,6 +53,8 @@ public class SeckillServiceImpl implements SeckillService {
     private SuccesskilledMapper successkilledMapper;
 
 
+    @Autowired
+    private RedisDao redisDao;
 
     /**
      * 查询全部秒杀的商品
@@ -81,10 +95,16 @@ public class SeckillServiceImpl implements SeckillService {
      */
     @Override
     public ServerResponse<Exposer> exportSeckillUrl(Long seckillId) {
-        Seckill seckill = seckillMapper.selectByPrimaryKey(seckillId);
+        Seckill seckill = redisDao.getSeckill(seckillId);
+        //如果redis中没有缓存
         if(seckill == null){
-            Exposer exposer = new Exposer(false, seckillId);
-            return ServerResponse.createByError(exposer);
+            seckill = seckillMapper.selectByPrimaryKey(seckillId);
+            //如果数据库中没有该秒杀商品
+            if(seckill == null){
+                Exposer exposer = new Exposer(false, seckillId);
+                return ServerResponse.createByError(exposer);
+            }
+            redisDao.setSeckill(seckillId,seckill);
         }
 
         Date startTime = seckill.getStartTime();
@@ -120,23 +140,24 @@ public class SeckillServiceImpl implements SeckillService {
         }
 
         //执行秒杀逻辑：减库存 + 记录购买行为
-
-        // 减库存
         Date killDate = new Date();
-        int updateCount = seckillMapper.reduceNumber(seckillId,killDate);
-        if(updateCount <= 0){
-            return ServerResponse.createByErrorMsg("秒杀已结束");
+
+        Successkilled successkilled = new Successkilled();
+        successkilled.setSeckillId(seckillId);
+        successkilled.setUserPhone(userPhone);
+        successkilled.setCreateTime(killDate);
+        successkilled.setState(SeckillStatusCode.SUCCESS.getCode());
+        //先记录购买行为
+        int insertCount = successkilledMapper.insertSelective(successkilled);
+        if(insertCount <= 0){
+            //插入失败，服务器内部错误
+            return ServerResponse.createByErrorCodeMsg(ResponseStatusCode.INNER_ERROR.getCode(),ResponseStatusCode.INNER_ERROR.getDesc());
         }else {
-            // 记录购买行为
-            Successkilled successkilled = new Successkilled();
-            successkilled.setSeckillId(seckillId);
-            successkilled.setUserPhone(userPhone);
-            successkilled.setCreateTime(killDate);
-            successkilled.setState(SeckillStatusCode.SUCCESS.getCode());
-            int insertCount = successkilledMapper.insertSelective(successkilled);
-            if(insertCount <= 0){
-                //插入失败，服务器内部错误
-                return ServerResponse.createByErrorCodeMsg(ResponseStatusCode.INNER_ERROR.getCode(),ResponseStatusCode.INNER_ERROR.getDesc());
+            // 再减库存
+            int updateCount = seckillMapper.reduceNumber(seckillId,killDate);
+            if(updateCount <= 0){
+                //rowback
+               throw new SeckillException("秒杀结束");
             }
             //插入成功，组装SuccessSecKilledWithSeckill对象
             response = this.assembleSuccessSecKilledWithSeckill(successkilledKey);
@@ -144,6 +165,54 @@ public class SeckillServiceImpl implements SeckillService {
                 return response;
             }
             return ServerResponse.createBySuccess(new SeckillExecution(seckillId,SeckillStatusCode.SUCCESS.getCode(),SeckillStatusCode.SUCCESS.getDesc(), (SuccessSecKilledWithSeckill) response.getData()));
+        }
+    }
+
+    /**
+     * 执行秒杀操作by 存储过程
+     *
+     * @param successkilledKey
+     * @param md5
+     */
+    @Override
+    public ServerResponse<SeckillExecution> executeSeckillProcedure(SuccesskilledKey successkilledKey, String md5) {
+        Long seckillId = successkilledKey.getSeckillId();
+        Long userPhone = successkilledKey.getUserPhone();
+
+        ServerResponse response = this.checkSuccessSeckilled(successkilledKey);
+        if(!response.isSuccess()){
+            return response;
+        }
+        if(StringUtils.isBlank(md5) || !StringUtils.equals(md5,MD5Util.MD5EncodeUtf8(seckillId.toString()))){
+            return ServerResponse.createByErrorMsg("参数错误，请重试！");
+        }
+
+        //执行秒杀逻辑：减库存 + 记录购买行为
+        Date killDate = new Date();
+
+        Map<String,Object> paramMap = new HashMap<>();
+        paramMap.put("seckillId",seckillId);
+        paramMap.put("phone",userPhone);
+        paramMap.put("killTime",killDate);
+        paramMap.put("result",null);
+
+        //执行存储过程，result被赋值
+        try {
+            seckillMapper.killByProcedure(paramMap);
+            //获取result
+            int result = (Integer) paramMap.get("result");
+            if(result == 1){
+                response = this.assembleSuccessSecKilledWithSeckill(successkilledKey);
+                if(!response.isSuccess()){
+                    return response;
+                }
+                return ServerResponse.createBySuccess(new SeckillExecution(seckillId,SeckillStatusCode.SUCCESS.getCode(),SeckillStatusCode.SUCCESS.getDesc(),
+                        (SuccessSecKilledWithSeckill) response.getData()));
+            }
+            return ServerResponse.createByErrorCodeMsg(300,"秒杀失败");
+        }catch (Exception e){
+            logger.error("执行存储过程出错",e);
+            return  ServerResponse.createByErrorCodeMsg(ResponseStatusCode.INNER_ERROR.getCode(),"执行存储过程出错");
         }
     }
 
