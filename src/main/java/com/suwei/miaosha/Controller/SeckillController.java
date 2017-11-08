@@ -74,7 +74,6 @@ public class SeckillController {
     @GetMapping("/{seckillId}/{md5}/execute")
     public ServerResponse<SeckillExecution> execute(@PathVariable("seckillId") Long seckillId, @PathVariable("md5")String md5) throws SeckillException {
         Long userPhone = 15979305570L;
-        System.out.println(seckillId + md5);
         if(userPhone == null){
             return ServerResponse.createByErrorCodeMsg(ResponseStatusCode.NEED_LOGIN.getCode(),"未登录，请先先去登录");
         }

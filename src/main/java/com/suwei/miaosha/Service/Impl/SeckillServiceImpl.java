@@ -206,6 +206,7 @@ public class SeckillServiceImpl implements SeckillService {
                 if(!response.isSuccess()){
                     return response;
                 }
+
                 return ServerResponse.createBySuccess(new SeckillExecution(seckillId,SeckillStatusCode.SUCCESS.getCode(),SeckillStatusCode.SUCCESS.getDesc(),
                         (SuccessSecKilledWithSeckill) response.getData()));
             }
@@ -223,8 +224,16 @@ public class SeckillServiceImpl implements SeckillService {
      */
     @Override
     public ServerResponse checkSuccessSeckilled(SuccesskilledKey successkilledKey){
-        Successkilled successkilled = successkilledMapper.selectByPrimaryKey(successkilledKey);
+        //从redis缓存中取出successkilled
+        Successkilled successkilled = redisDao.getSuccesskilled(successkilledKey);
         if(successkilled != null){
+            return ServerResponse.createByErrorMsg("请勿重复秒杀");
+        }
+        //没有successkilled，则从数据库中查询出来
+        Successkilled successkilledFromMysql = successkilledMapper.selectByPrimaryKey(successkilledKey);
+        if(successkilledFromMysql != null){
+            //将successkilledKey缓存进redis中,以便检查是否重复秒杀
+            redisDao.setSuccesskilled(successkilledKey,successkilledFromMysql);
             return ServerResponse.createByErrorMsg("请勿重复秒杀");
         }
         return ServerResponse.createBySuccess();
